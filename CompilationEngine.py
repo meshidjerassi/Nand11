@@ -46,7 +46,7 @@ class CompilationEngine:
         """
         self.tokenizer = tokenizer
         self.vm = VMWriter(output)
-        self.symbolTable = SymbolTable()
+        self._symbolTable = SymbolTable()
         self.className = None
         self.isVoid = None
 
@@ -72,9 +72,11 @@ class CompilationEngine:
         """
         # self.output.write(CLASS_VAR_DEC_OPEN.format(self.tokenizer.keyWord()))
         self.tokenizer.advance()  # type
-        self._writeType()
+        varType = self._writeType()
+
         self.tokenizer.advance()  # varName
-        # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
+        varName = self.tokenizer.identifier
+#todo
         self.tokenizer.advance()  # , or ;
         while self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == ',':
             # self.output.write(WRITE_SYMBOL.format(","))
@@ -102,25 +104,23 @@ class CompilationEngine:
             self.CompileVarDec()
         self.CompileStatements()
 
-    def CompileVarDec(self):
+    def CompileVarDec(self):  # todo comments to Meshi - added the var declarations to symbol table
         """
         compiles variable declarations
         """
-        # self.output.write(VAR_DEC_OPEN)
-        # self.output.write(WRITE_KEYWORD.format("var"))
         self.tokenizer.advance()  # type
-        self._writeType()
-        self.tokenizer.advance()  # var name
-        # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
+        var_type = self._writeType()
+
+        self.tokenizer.advance()  # varName
+        var_name = self.tokenizer.identifier
+        self._symbolTable.define(var_name, var_type, consts.SUBROUTINE_KINDS[1])  # Add var to symbol table
+
         self.tokenizer.advance()  # , or ;
         while self.tokenizer.symbol() == ',':
-            # self.output.write(WRITE_SYMBOL.format(","))
-            self.tokenizer.advance()  # varName
-            # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
+            var_name = self.tokenizer.advance()  # varName
+            self._symbolTable.define(var_name, var_type, consts.SUBROUTINE_KINDS[1])  # Add var to symbol table
             self.tokenizer.advance()  # , or ;
-        # self.output.write(WRITE_SYMBOL.format(";"))
         self.tokenizer.advance()
-        # self.output.write(VAR_DEC_END)
 
     def _writeType(self):
         """
@@ -143,7 +143,7 @@ class CompilationEngine:
             argType = self._writeType()
             self.tokenizer.advance()  # varName
             argName = self.tokenizer.identifier()
-            self.symbolTable.define(argName, argType, consts.SUBROUTINE_KINDS[0])
+            self._symbolTable.define(argName, argType, consts.SUBROUTINE_KINDS[0])
             self.tokenizer.advance()  # , or statement
             while self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == ',':
                 counter += 1
@@ -151,7 +151,7 @@ class CompilationEngine:
                 argType = self._writeType()
                 self.tokenizer.advance()  # varName
                 argName = self.tokenizer.identifier()
-                self.symbolTable.define(argName, argType, consts.SUBROUTINE_KINDS[0])
+                self._symbolTable.define(argName, argType, consts.SUBROUTINE_KINDS[0])
                 self.tokenizer.advance()  # , or statement
         return counter
 
@@ -175,23 +175,22 @@ class CompilationEngine:
         """
         compiles let statement
         """
-        # self.output.write(A_STATEMENT_OPEN.format("let"))
-        # self.output.write(WRITE_KEYWORD.format("let"))
         self.tokenizer.advance()  # var name
-        # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
+        var_name = self.tokenizer.identifier
+        kind_to_push = self._symbolTable.kindOf(var_name)  # check type of var
+        if kind_to_push == consts.SUBROUTINE_KINDS[1]:
+            kind_to_push = "local"
+        index = self._symbolTable.indexOf(var_name)
         self.tokenizer.advance()  # [ or =
         if self.tokenizer.symbol() == '[':
-            # self.output.write(WRITE_SYMBOL.format("["))
             self.tokenizer.advance()  # exp
             self.CompileExpression()
-            # self.output.write(WRITE_SYMBOL.format("]"))
             self.tokenizer.advance()  # =
-        # self.output.write(WRITE_SYMBOL.format("="))
         self.tokenizer.advance()
         self.CompileExpression()
-        # self.output.write(WRITE_SYMBOL.format(";"))
         self.tokenizer.advance()
-        # self.output.write(A_STATEMENT_END.format("let"))
+        # todo why should we pop local 0?????
+        self.vm.writePush(kind_to_push, index)  # seg  + index
 
     def CompileIf(self):
         """
@@ -307,7 +306,14 @@ class CompilationEngine:
                 self.vm.writeArithmetic(op)
 
         else:
-            # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
+            func_name = self.tokenizer.identifier()
+            self.tokenizer.advance()
+            if self.tokenizer.symbol() == '.':
+                func_name += self.tokenizer.symbol()
+                self.tokenizer.advance()
+                func_name += self.tokenizer.identifier()
+            argN = self.CompileParameterList()
+            self.vm.writeCall(func_name, argN)
             self.tokenizer.advance()  # ( [ . or next thing (if var name)
             if self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() in ("[", "(", "."):
                 # self.output.write(WRITE_SYMBOL.format(self.tokenizer.symbol()))
