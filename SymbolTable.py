@@ -11,7 +11,7 @@ class SymbolTable:
 
     def startSubroutine(self):
         self._subroutineVar = {}
-        self.varCount = 0
+        self._varCount = 0
         self._argCount = 0
 
 # STATIC FIELD ARG VAR
