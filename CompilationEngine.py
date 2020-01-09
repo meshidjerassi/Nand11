@@ -4,6 +4,7 @@ from VMWriter import VMWriter
 
 FUNC_TYPE = {"function": 0, "method": 1, "constructor": 0}
 OP_VM = {'+': "add", '-': "sub", '*': "Math.multiply", '/': "Math.divide", '&': "and", '|': "or"}
+UNI_VM = {'-': "neg", '~': "not"}
 
 WRITE_KEYWORD = "<keyword> {} </keyword>\n"
 WRITE_SYMBOL = "<symbol> {} </symbol>\n"
@@ -47,6 +48,7 @@ class CompilationEngine:
         self.vm = VMWriter(output)
         self.symbolTable = SymbolTable()
         self.className = None
+        self.isVoid = None
 
     def CompileClass(self):
         """
@@ -88,7 +90,7 @@ class CompilationEngine:
         """
         addToArgNum = FUNC_TYPE[self.tokenizer.keyWord()]
         self.tokenizer.advance()  # retType
-        isVoid = (self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() == "void")
+        self.isVoid = (self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() == "void")
         self.tokenizer.advance()  # subRoutine name
         funcName = self.className + "." + self.tokenizer.identifier()
         self.tokenizer.advance()  # (
@@ -259,14 +261,13 @@ class CompilationEngine:
         """
         compiles return statement
         """
-        # self.output.write(A_STATEMENT_OPEN.format("return"))
-        # self.output.write(WRITE_KEYWORD.format("return"))
         self.tokenizer.advance()  # statement or ;
         if self.tokenizer.tokenType() != "symbol" or self.tokenizer.symbol() != ';':
             self.CompileExpression()
-        # self.output.write(WRITE_SYMBOL.format(";"))
+        if self.isVoid:
+            self.vm.writePush("constant", 0)
+        self.vm.writeReturn()
         self.tokenizer.advance()
-        # self.output.write(A_STATEMENT_END.format("return"))
 
     def CompileExpression(self):
         """
@@ -297,15 +298,16 @@ class CompilationEngine:
             # self.output.write(WRITE_KEYWORD.format(self.tokenizer.keyWord()))
             self.tokenizer.advance()
         elif self.tokenizer.tokenType() == "symbol":
-            # self.output.write(WRITE_SYMBOL.format(self.tokenizer.symbol()))
             if self.tokenizer.symbol() == '(':
                 self.tokenizer.advance()
                 self.CompileExpression()
-                # self.output.write(WRITE_SYMBOL.format(')'))
                 self.tokenizer.advance()  # next thing
             elif self.tokenizer.symbol() in ("-", "~"):
+                op = UNI_VM[self.tokenizer.symbol()]
                 self.tokenizer.advance()
                 self.CompileTerm()
+                self.vm.writeArithmetic(op)
+
         else:
             # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
             self.tokenizer.advance()  # ( [ . or next thing (if var name)
