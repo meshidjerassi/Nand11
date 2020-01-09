@@ -25,6 +25,9 @@ GROUP_DICT = {1: "stringConstant", 2: "keyword", 3: "symbol", 4: "identifier", 5
 
 HTML_TRANSLATOR = {"<": "&lt;", ">": "&gt;", "\"": "&quot;", "&": "&amp;"}
 
+CLASS_KINDS = ["static", "field"]
+
+SUBROUTINE_KINDS = ["arg", "var"]
 
 def regex_builder():
     reg = "(" + REG_STRING + ")"
