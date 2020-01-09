@@ -1,6 +1,6 @@
 """
 Our program parses a Jack file, breaks it down into it's 5 components and
-creates an XML file according to the tokenized types
+creates a VM file according to the tokenized types and the compilation logic
 """
 
 import glob
@@ -24,7 +24,7 @@ def main(path):
     for file in directory:
         with open(file, 'r') as f:
             tokenizer = jt.JackTokenizer(f)
-            with open(file[:-4] + "xml", 'w') as output:
+            with open(file[:-4] + "vm", 'w') as output:
                 cEngine = ce.CompilationEngine(tokenizer, output)
                 cEngine.CompileClass()
 

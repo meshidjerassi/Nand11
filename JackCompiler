@@ -12,4 +12,4 @@
 # Obviously, your project may be more complicated and require a different run file.
 # For this file (VMtranslator-python) to run when you call "VMtranslator", rename it to "VMtranslator".
 
-python3 JackAnalyzer.py $*
+python3 JackCompiler.py $*
