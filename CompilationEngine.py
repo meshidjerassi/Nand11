@@ -3,7 +3,7 @@ from SymbolTable import SymbolTable
 from VMWriter import VMWriter
 
 FUNC_TYPE = {"function": 0, "method": 1, "constructor": 0}
-OP_VM = {'+': "add", '-': "sub", '*': "call Math.multiply 2", '/': "call Math.divide 2", '&': "and"}
+OP_VM = {'+': "add", '-': "sub", '*': "Math.multiply", '/': "Math.divide", '&': "and", '|': "or"}
 
 WRITE_KEYWORD = "<keyword> {} </keyword>\n"
 WRITE_SYMBOL = "<symbol> {} </symbol>\n"
@@ -274,9 +274,14 @@ class CompilationEngine:
         """
         self.CompileTerm()
         while self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() in consts.OP:
-            # self.output.write(WRITE_SYMBOL.format(self.tokenizer.symbol()))
+            op = OP_VM[self.tokenizer.symbol()]
+            simpleOp = self.tokenizer.symbol() not in ("*", "/")
             self.tokenizer.advance()  # term
             self.CompileTerm()
+            if simpleOp:
+                self.vm.writeArithmetic(op)
+            else:
+                self.vm.writeCall(op, 2)
 
     def CompileTerm(self):
         """
