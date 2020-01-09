@@ -1,5 +1,6 @@
 import LexicalElements as le
 
+
 class SymbolTable:
     def __init__(self):
         self._classVar = {}
@@ -14,7 +15,7 @@ class SymbolTable:
         self._varCount = 0
         self._argCount = 0
 
-# STATIC FIELD ARG VAR
+    # STATIC FIELD ARG VAR
     def define(self, name, type, kind):
         if kind in le.CLASS_KINDS:
             if kind == le.CLASS_KINDS[0]:
@@ -43,7 +44,7 @@ class SymbolTable:
         if kind == le.SUBROUTINE_KINDS[1]:
             return self._varCount
         print("error var count")
-        #todo delete after testing
+        # todo delete after testing
 
     def kindOf(self, name):
         if name in self._subroutineVar:
