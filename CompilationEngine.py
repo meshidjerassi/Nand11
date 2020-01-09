@@ -241,21 +241,19 @@ class CompilationEngine:
         """
         self.tokenizer.advance()  # subroutine name / class name/var name
         name = self.tokenizer.identifier()
-        isVar = True
-        if self.symbolTable.kindOf(name) == "NONE":
-            isVar = False
+
         self.tokenizer.advance()  # . or (
         if self.tokenizer.symbol() == '.':
             self.tokenizer.advance()  # subroutine name
-            name += self.tokenizer.identifier()
+            name += "." + self.tokenizer.identifier()
             self.tokenizer.advance()  # (
         self.tokenizer.advance()  # exp or )
-        self.CompileExpressionList()
-        # self.output.write(WRITE_SYMBOL.format(")"))
+        argN = self.CompileExpressionList()
         self.tokenizer.advance()  # ;
-        # self.output.write(WRITE_SYMBOL.format(";"))
         self.tokenizer.advance()
-        # self.output.write(A_STATEMENT_END.format("do"))
+        self.vm.writeCall(name, argN)
+        if self.isVoid:
+            self.vm.writePop("temp", 0)
 
     def CompileReturn(self):
         """
@@ -338,8 +336,12 @@ class CompilationEngine:
         """
         compiles expression list
         """
+        counter = 0
         if not (self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == ')'):
             self.CompileExpression()
+            counter += 1
             while self.tokenizer.symbol() == ',':
+                counter += 1
                 self.tokenizer.advance()  # expression
                 self.CompileExpression()
+        return counter
