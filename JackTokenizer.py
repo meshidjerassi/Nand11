@@ -74,10 +74,7 @@ class JackTokenizer:
 
     def symbol(self):
         if self.__tokenized[self.index][1] == le.GROUP_DICT[3]:
-            ret = self.__tokenized[self.index][0]
-            if ret in le.HTML_TRANSLATOR:
-                return le.HTML_TRANSLATOR[ret]
-            return ret
+            return self.__tokenized[self.index][0]
 
     def identifier(self):
         if self.__tokenized[self.index][1] == le.GROUP_DICT[4]:
