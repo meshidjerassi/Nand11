@@ -9,8 +9,6 @@ KIND_VM = {"static": "static", "field": "this", "arg": "argument", "var": "local
 
 
 class CompilationEngine:
-    labelC = 0  # todo: per subroutine???
-
     def __init__(self, tokenizer, output):
         """
         c'tor
@@ -21,6 +19,7 @@ class CompilationEngine:
         self.vmWriter = VMWriter(output)
         self.symbols = SymbolTable()
         self.className = None
+        self.labelC = 0
 
     def CompileClass(self):
         """
@@ -44,7 +43,7 @@ class CompilationEngine:
         """
         varKind = self.tokenizer.keyWord()
         self.tokenizer.advance()  # type
-        varType = self._writeType()
+        varType = self._getType()
         self.tokenizer.advance()  # varName
         varName = self.tokenizer.identifier()
         self.symbols.define(varName, varType, varKind)
@@ -61,11 +60,10 @@ class CompilationEngine:
         """
         subroutine = self.tokenizer.keyWord()
         self.tokenizer.advance()  # retType
-        retType = self._writeType()
         self.tokenizer.advance()  # subRoutine name
         name = self.tokenizer.identifier()
         self.tokenizer.advance()  # (
-        # todo: hi!
+        self.labelC = 0
         self.symbols.startSubroutine()
         if subroutine == "method":
             self.symbols.define("this", self.className, "arg")
@@ -89,9 +87,10 @@ class CompilationEngine:
     def CompileVarDec(self):
         """
         compiles variable declarations
+        :return: number of vars
         """
         self.tokenizer.advance()  # type
-        varType = self._writeType()
+        varType = self._getType()
         self.tokenizer.advance()  # var name
         varName = self.tokenizer.identifier()
         self.symbols.define(varName, varType, "var")
@@ -106,9 +105,9 @@ class CompilationEngine:
         self.tokenizer.advance()
         return counter
 
-    def _writeType(self):
+    def _getType(self):
         """
-        helper method to compile type
+        helper method to get type, either keyword or identifier
         """
         if self.tokenizer.tokenType() == "keyword":
             return self.tokenizer.keyWord()
@@ -122,7 +121,7 @@ class CompilationEngine:
         self.tokenizer.advance()  # type / statement
         if self.tokenizer.tokenType() == "identifier" or (
                 self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() in consts.VAR_TYPES):
-            paramType = self._writeType()
+            paramType = self._getType()
             self.tokenizer.advance()  # varName
             paramName = self.tokenizer.identifier()
             self.symbols.define(paramName, paramType, "arg")
@@ -159,16 +158,16 @@ class CompilationEngine:
         name = self.tokenizer.identifier()
         kind = self.symbols.kindOf(name)
         self.tokenizer.advance()  # [ or =
-        if self.tokenizer.symbol() == '[':
+        if self.tokenizer.symbol() == '[':  # access a specific cell in array
             self.tokenizer.advance()  # exp
             self.CompileExpression()
             position = self.symbols.indexOf(name)
             self.vmWriter.writePush(KIND_VM[kind], position)
-            self.vmWriter.writeArithmetic("add")
+            self.vmWriter.writeArithmetic("add")  # start point + requested position
             self.tokenizer.advance()  # =
             self.tokenizer.advance()
             self.CompileExpression()
-            self.vmWriter.writePop("temp", 0)
+            self.vmWriter.writePop("temp", 0)  # insert result to requested array cell
             self.vmWriter.writePop("pointer", 1)
             self.vmWriter.writePush("temp", 0)
             self.vmWriter.writePop("that", 0)
@@ -176,47 +175,47 @@ class CompilationEngine:
             self.tokenizer.advance()
             self.CompileExpression()
             position = self.symbols.indexOf(name)
-            self.vmWriter.writePop(KIND_VM[kind], position)
+            self.vmWriter.writePop(KIND_VM[kind], position)  # insert result to requested var
         self.tokenizer.advance()
 
     def CompileIf(self):
         """
         compiles if statement
         """
-        elseLabel = "L" + str(CompilationEngine.labelC)
-        CompilationEngine.labelC += 1
-        after = "L" + str(CompilationEngine.labelC)
-        CompilationEngine.labelC += 1
+        elseLabel = "L" + str(self.labelC)  # create labels
+        self.labelC += 1
+        after = "L" + str(self.labelC)
+        self.labelC += 1
         self.tokenizer.advance()  # (
         self.tokenizer.advance()  # exp
         self.CompileExpression()
-        self.vmWriter.writeArithmetic("not")
+        self.vmWriter.writeArithmetic("not")  # negate cond.
         self.vmWriter.writeIf(elseLabel)
         self.tokenizer.advance()  # {
         self.tokenizer.advance()  # statements
-        self.CompileStatements()
+        self.CompileStatements()  # if true
         self.vmWriter.writeGoto(after)
         self.vmWriter.writeLabel(elseLabel)
         self.tokenizer.advance()
-        if self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() == "else":
+        if self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() == "else":  # else section exists
             self.tokenizer.advance()  # {
             self.tokenizer.advance()  # statements
             self.CompileStatements()
             self.tokenizer.advance()
-        self.vmWriter.writeLabel(after)
+        self.vmWriter.writeLabel(after)  # after the scope
 
     def CompileWhile(self):
         """
         compiles while statement
         """
-        loop = "L" + str(CompilationEngine.labelC)
-        CompilationEngine.labelC += 1
-        after = "L" + str(CompilationEngine.labelC)
-        CompilationEngine.labelC += 1
+        loop = "L" + str(self.labelC)  # create labels
+        self.labelC += 1
+        after = "L" + str(self.labelC)
+        self.labelC += 1
         self.tokenizer.advance()  # (
         self.tokenizer.advance()  # exp
         self.vmWriter.writeLabel(loop)
-        self.CompileExpression()
+        self.CompileExpression()  # loop cond.
         self.vmWriter.writeArithmetic("not")
         self.vmWriter.writeIf(after)
         self.tokenizer.advance()  # {
@@ -232,7 +231,7 @@ class CompilationEngine:
         """
         self.tokenizer.advance()  # subroutine name / class name/var name
         self.CompileTerm()
-        self.vmWriter.writePop("temp", 0)
+        self.vmWriter.writePop("temp", 0)  # pop dummy-value
         self.tokenizer.advance()
 
     def CompileReturn(self):
@@ -242,25 +241,9 @@ class CompilationEngine:
         self.tokenizer.advance()  # statement or ;
         if self.tokenizer.tokenType() != "symbol" or self.tokenizer.symbol() != ';':
             self.CompileExpression()
-        else:
-            self.vmWriter.writePush("constant", 0)
+        else:  # void
+            self.vmWriter.writePush("constant", 0)  # dummy value
         self.vmWriter.writeReturn()
-        self.tokenizer.advance()
-
-    def _write_exp_and_statements(self):
-        """
-        helper method to write (expression){statements}
-        """
-        self.tokenizer.advance()  # (
-        # self.output.write(WRITE_SYMBOL.format("("))
-        self.tokenizer.advance()  # exp
-        self.CompileExpression()
-        # self.output.write(WRITE_SYMBOL.format(")"))
-        self.tokenizer.advance()  # {
-        # self.output.write(WRITE_SYMBOL.format("{"))
-        self.tokenizer.advance()  # statements
-        self.CompileStatements()
-        # self.output.write(WRITE_SYMBOL.format("}"))
         self.tokenizer.advance()
 
     def CompileExpression(self):
@@ -286,9 +269,9 @@ class CompilationEngine:
             self.tokenizer.advance()
         elif self.tokenizer.tokenType() == "stringConstant":
             stringLen = len(self.tokenizer.stringVal())
-            self.vmWriter.writePush("constant", stringLen)
+            self.vmWriter.writePush("constant", stringLen)  # new string
             self.vmWriter.writeCall("String.new", 1)
-            for i in range(stringLen):
+            for i in range(stringLen):  # push each char
                 char = ord(self.tokenizer.stringVal()[i])
                 self.vmWriter.writePush("constant", char)
                 self.vmWriter.writeCall("String.appendChar", 2)
@@ -307,17 +290,16 @@ class CompilationEngine:
                 self.tokenizer.advance()
                 self.CompileExpression()
                 self.tokenizer.advance()  # next thing
-            elif self.tokenizer.symbol() in ("-", "~"):
+            elif self.tokenizer.symbol() in UNI_VM:
                 op = self.tokenizer.symbol()
                 self.tokenizer.advance()
                 self.CompileTerm()
                 self.vmWriter.writeArithmetic(UNI_VM[op])
-        else:
+        else:  # var or subroutine call
             name = self.tokenizer.identifier()
             kind = self.symbols.kindOf(name)
             self.tokenizer.advance()  # ( [ . or next thing (if var name)
-
-            if self.tokenizer.symbol() == '[':
+            if self.tokenizer.symbol() == '[':  # change that to array position
                 self.tokenizer.advance()
                 self.CompileExpression()
                 position = self.symbols.indexOf(name)
@@ -327,21 +309,19 @@ class CompilationEngine:
                 self.vmWriter.writePush("that", 0)
                 self.tokenizer.advance()  # next thing
             else:
-                fname = name
-                fclass = self.className
-                dot = False
+                fullName = self.className + "." + name
+                dot = False  # function being called without class
                 argsN = 0
                 if self.tokenizer.symbol() == '.':
                     dot = True
                     self.tokenizer.advance()  # subroutine name
-                    fname = self.tokenizer.identifier()
                     if kind != "NONE":
+                        fullName = self.symbols.typeOf(name) + "." + self.tokenizer.identifier()
                         argsN += 1
-                        fclass = self.symbols.typeOf(name)
                         position = self.symbols.indexOf(name)
                         self.vmWriter.writePush(KIND_VM[kind], position)
                     else:
-                        fclass = name
+                        fullName = name + "." + self.tokenizer.identifier()
                     self.tokenizer.advance()  # (
                 if self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == "(":
                     if not dot:
@@ -349,17 +329,18 @@ class CompilationEngine:
                         self.vmWriter.writePush("pointer", 0)
                     self.tokenizer.advance()  # exp or )
                     argsN += self.CompileExpressionList()
-                    self.vmWriter.writeCall(fclass + "." + fname, argsN)
-                    self.tokenizer.advance()  # next thing todo:?
+                    self.vmWriter.writeCall(fullName, argsN)
+                    self.tokenizer.advance()
                 elif kind != "NONE":
                     position = self.symbols.indexOf(name)
                     self.vmWriter.writePush(KIND_VM[kind], position)
                 else:
-                    self.tokenizer.advance()  # next thing todo:?
+                    self.tokenizer.advance()
 
     def CompileExpressionList(self):
         """
         compiles expression list
+        :return: number of args
         """
         counter = 0
         if not (self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == ')'):
