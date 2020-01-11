@@ -2,41 +2,14 @@ import LexicalElements as consts
 from SymbolTable import SymbolTable
 from VMWriter import VMWriter
 
-FUNC_TYPE = {"function": 0, "method": 1, "constructor": 0}
-OP_VM = {'+': "add", '-': "sub", '*': "Math.multiply", '/': "Math.divide", '&': "and", '|': "or"}
+OP_VM = {'+': "add", '-': "sub", '*': "Math.multiply", '/': "Math.divide", '&': "and", '|': "or", "<": "lt", ">": "gt",
+         "=": "eq"}
 UNI_VM = {'-': "neg", '~': "not"}
-
-WRITE_KEYWORD = "<keyword> {} </keyword>\n"
-WRITE_SYMBOL = "<symbol> {} </symbol>\n"
-WRITE_IDENTIFIER = "<identifier> {} </identifier>\n"
-WRITE_INT = "<integerConstant> {} </integerConstant>\n"
-WRITE_STRING = "<stringConstant> {} </stringConstant>\n"
-
-CLASS_OPEN = "<class>\n" + WRITE_KEYWORD.format("class")
-CLASS_END = WRITE_SYMBOL.format("}") + "</class>\n"
-CLASS_VAR_DEC_OPEN = "<classVarDec>\n" + WRITE_KEYWORD
-CLASS_VAR_DEC_END = "</classVarDec>\n"
-SUBROUTINE_DEC_OPEN = "<subroutineDec>\n" + WRITE_KEYWORD
-SUBROUTINE_DEC_END = "</subroutineDec>\n"
-PARAM_LIST_OPEN = "<parameterList>\n"
-PARAM_LIST_END = "</parameterList>\n"
-SUBROUTINE_BODY_OPEN = "<subroutineBody>\n"
-SUBROUTINE_BODY_END = "</subroutineBody>\n"
-VAR_DEC_OPEN = "<varDec>\n"
-VAR_DEC_END = "</varDec>\n"
-STATEMENTS_OPEN = "<statements>\n"
-STATEMENTS_END = "</statements>\n"
-A_STATEMENT_OPEN = "<{}Statement>\n"
-A_STATEMENT_END = "</{}Statement>\n"
-EXP_OPEN = "<expression>\n"
-EXP_END = "</expression>\n"
-TERM_OPEN = "<term>\n"
-TERM_END = "</term>\n"
-EXP_LIST_OPEN = "<expressionList>\n"
-EXP_LIST_END = "</expressionList>\n"
+KIND_VM = {"static": "static", "field": "this", "arg": "argument", "var": "local"}
 
 
 class CompilationEngine:
+    labelC = 0  # todo: per subroutine???
 
     def __init__(self, tokenizer, output):
         """
@@ -45,10 +18,9 @@ class CompilationEngine:
         :param output: output file/stream
         """
         self.tokenizer = tokenizer
-        self.vm = VMWriter(output)
-        self._symbolTable = SymbolTable()
+        self.vmWriter = VMWriter(output)
+        self.symbols = SymbolTable()
         self.className = None
-        self.isVoid = None
 
     def CompileClass(self):
         """
@@ -70,57 +42,69 @@ class CompilationEngine:
         """
         compiles class variables decelerations
         """
-        # self.output.write(CLASS_VAR_DEC_OPEN.format(self.tokenizer.keyWord()))
+        varKind = self.tokenizer.keyWord()
         self.tokenizer.advance()  # type
         varType = self._writeType()
-
         self.tokenizer.advance()  # varName
-        varName = self.tokenizer.identifier
-#todo
+        varName = self.tokenizer.identifier()
+        self.symbols.define(varName, varType, varKind)
         self.tokenizer.advance()  # , or ;
         while self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == ',':
-            # self.output.write(WRITE_SYMBOL.format(","))
             self.tokenizer.advance()  # varName
-            # self.output.write(WRITE_IDENTIFIER.format(self.tokenizer.identifier()))
+            varName = self.tokenizer.identifier()
+            self.symbols.define(varName, varType, varKind)
             self.tokenizer.advance()  # , or ;
-        # self.output.write(WRITE_SYMBOL.format(";"))
-        # self.output.write(CLASS_VAR_DEC_END)
 
     def CompileSubroutine(self):
         """
         compiles subroutine declarations
         """
-        addToArgNum = FUNC_TYPE[self.tokenizer.keyWord()]
+        subroutine = self.tokenizer.keyWord()
         self.tokenizer.advance()  # retType
-        self.isVoid = (self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() == "void")
+        retType = self._writeType()
         self.tokenizer.advance()  # subRoutine name
-        funcName = self.className + "." + self.tokenizer.identifier()
+        name = self.tokenizer.identifier()
         self.tokenizer.advance()  # (
-        argN = self.CompileParameterList()
-        self.vm.writeFunction(funcName, argN + addToArgNum)
+        # todo: hi!
+        self.symbols.startSubroutine()
+        if subroutine == "method":
+            self.symbols.define("this", self.className, "arg")
+        self.CompileParameterList()
         self.tokenizer.advance()  # {
         self.tokenizer.advance()  # var / statement
+        localN = 0
         while self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() == "var":
-            self.CompileVarDec()
+            localN += self.CompileVarDec()
+        self.vmWriter.writeFunction(self.className + "." + name, localN)
+        if subroutine == "method":
+            self.vmWriter.writePush("argument", 0)
+            self.vmWriter.writePop("pointer", 0)
+        elif subroutine == "constructor":
+            fields = self.symbols.varCount("field")
+            self.vmWriter.writePush("constant", fields)
+            self.vmWriter.writeCall("Memory.alloc", 1)
+            self.vmWriter.writePop("pointer", 0)
         self.CompileStatements()
 
-    def CompileVarDec(self):  # todo comments to Meshi - added the var declarations to symbol table
+    def CompileVarDec(self):
         """
         compiles variable declarations
         """
         self.tokenizer.advance()  # type
-        var_type = self._writeType()
-
-        self.tokenizer.advance()  # varName
-        var_name = self.tokenizer.identifier
-        self._symbolTable.define(var_name, var_type, consts.SUBROUTINE_KINDS[1])  # Add var to symbol table
-
+        varType = self._writeType()
+        self.tokenizer.advance()  # var name
+        varName = self.tokenizer.identifier()
+        self.symbols.define(varName, varType, "var")
         self.tokenizer.advance()  # , or ;
+        counter = 1
         while self.tokenizer.symbol() == ',':
-            var_name = self.tokenizer.advance()  # varName
-            self._symbolTable.define(var_name, var_type, consts.SUBROUTINE_KINDS[1])  # Add var to symbol table
+            counter += 1
+            self.tokenizer.advance()  # varName
+            varName = self.tokenizer.identifier()
+            self.symbols.define(varName, varType, "var")
             self.tokenizer.advance()  # , or ;
         self.tokenizer.advance()
+        return counter
 
     def _writeType(self):
         """
@@ -136,24 +120,20 @@ class CompilationEngine:
         compiles parameter list
         """
         self.tokenizer.advance()  # type / statement
-        counter = 0
         if self.tokenizer.tokenType() == "identifier" or (
                 self.tokenizer.tokenType() == "keyword" and self.tokenizer.keyWord() in consts.VAR_TYPES):
-            counter += 1
-            argType = self._writeType()
+            paramType = self._writeType()
             self.tokenizer.advance()  # varName
-            argName = self.tokenizer.identifier()
-            self._symbolTable.define(argName, argType, consts.SUBROUTINE_KINDS[0])
+            paramName = self.tokenizer.identifier()
+            self.symbols.define(paramName, paramType, "arg")
             self.tokenizer.advance()  # , or statement
             while self.tokenizer.tokenType() == "symbol" and self.tokenizer.symbol() == ',':
-                counter += 1
                 self.tokenizer.advance()  # type
-                argType = self._writeType()
+                paramType = self.tokenizer.keyWord()
                 self.tokenizer.advance()  # varName
-                argName = self.tokenizer.identifier()
-                self._symbolTable.define(argName, argType, consts.SUBROUTINE_KINDS[0])
+                paramName = self.tokenizer.identifier()
+                self.symbols.define(paramName, paramType, "arg")
                 self.tokenizer.advance()  # , or statement
-        return counter
 
     def CompileStatements(self):
         """
