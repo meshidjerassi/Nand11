@@ -4,21 +4,23 @@ Meshi Djerassi, ID 315838151, meshi.djerassi@mail.huji.ac.il
 Shir Molina, ID 312535941, shir.molina@mail.huji.ac.il
 ===============================================================================
 
-                           Project 10 - JackAnalyzer
+                           Project 11 - JackCompiler
                            ----------------------- 
   
 
 Submitted Files
 ---------------
 README - This file.
-JackAnalyzer.py (main)
+JackCompiler.py (main)
 JackTokenizer.py
 LexicalElements.py
 CompilationEngine.py
+SymbolTable.py
+VMWriter.py
 Makefile
 JackAnalyzer (exe)
 
 Remarks
 -------
-Our program parses a Jack file, breaks it down into it's 5 components and
-creates an XML file according to the tokenized types
+Our program parses a Jack file, breaks it down into it's 5 components.
+Compiles the file and creates a translated file in VM code according to JACK grammar.
